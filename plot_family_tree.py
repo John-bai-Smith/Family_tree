@@ -11,6 +11,11 @@ class Person:
         self.children = [] # 存储子代person对象的列表
         self.x_person = 1  # 代表绘图时需要分配多大的横向空间
     
+    def init_info(self, name, generation, id):
+        self.name = name
+        self.generation = generation
+        self.ID = id
+
     def add_ID(self, id):
         self.ID = id
             
@@ -23,8 +28,8 @@ def compare_x_person(person):
         
 class FamilyTree:
     """家谱"""
-    def __init__(self, root):
-        self.root = root
+    def __init__(self):
+        self.root = Person('')
         self.dict = {}
         
         self.font_size = 6 # 人名的字体大小
@@ -34,10 +39,6 @@ class FamilyTree:
         self.y_word = 0.4  # 人名中每个字中心的竖向距离
         self.y1 = 0.1 # 子代名字离下方竖线距离微调，增大该值则距离减小
         self.y2 = 0.4 # 子代名字离上方竖线距离微调，增大该值则距离增大
-        
-        # 先将root加入到字典中
-        if root.ID:
-            self.dict[root.ID] = root 
         
     def add_child(self, parent, child):
         """添加一个人的直系后代"""
@@ -49,7 +50,7 @@ class FamilyTree:
         self._read_family_tree()
         
         self._count_children(self.root) # 遍历整个族谱获取每个人要分配的横向距离 
-        self._output_all_x_person() # 输出每个人的横向距离进行验证
+        # self._output_all_x_person() # 输出每个人的横向距离进行验证
         
         # 绘制
         fig, ax = plt.subplots()
@@ -70,16 +71,15 @@ class FamilyTree:
     def _read_family_tree(self):
         """从已有文件中读取家谱信息"""       
         with open('jiapu.txt', 'r') as f:
-            next(f) # 跳过前两行
-            next(f)
+            next(f) # 跳过第一行
+            # 存储第一位先祖
+            first_line = self._remove_double_quote(f.readline().rstrip('\n').split('\t'))
+            self.root.init_info(first_line[2], int(first_line[3]), first_line[5])
+            self.dict[self.root.ID] = self.root
+            
             for line in f:
-                # 对字符处理的准备工作
-                line = line.rstrip('\n') # 去掉行尾的换行符
-                strings = line.split('\t') # 分割字符串
-                # 去掉每个字符串中的双引号
-                for i, s in enumerate(strings):
-                    new_string = s.replace('"', '')
-                    strings[i] = new_string
+                # 对字符处理的准备工作：去掉行尾的换行符、分割字符串、去掉每个字符串中的双引号
+                strings = self._remove_double_quote(line.rstrip('\n').split('\t'))
                 
                 # 正式开工
                 # if self.dict.get(strings[4], 0) and self.dict[strings[4]].name == strings[0]: # 如果字典中可以查到这个长辈
@@ -101,6 +101,13 @@ class FamilyTree:
         #         for child in value.children:
         #             o.write(f" {child.name}")
         #         o.write("\n")
+    
+    def _remove_double_quote(self, strings):
+        """去除一行的双引号"""
+        for i, s in enumerate(strings):
+            new_string = s.replace('"', '')
+            strings[i] = new_string
+        return strings
     
     def _count_children(self, person):
         """递归计算每个人所需分配的横向空间"""
@@ -201,6 +208,5 @@ class FamilyTree:
 # 设置中文字体
 matplotlib.rcParams['font.family'] = ['SimHei']
 
-root = Person('思温', 1, 'S0010001')
-family_tree = FamilyTree(root)
+family_tree = FamilyTree()
 family_tree.plot_tree()
