@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt, os,matplotlib
 from tkinter.filedialog import *
 from matplotlib.backends.backend_pdf import PdfPages
-from decorator import timer
+#from decorator import timer
 matplotlib.use("Agg")
 
 class Person:
@@ -15,6 +15,7 @@ class Person:
         self.ID = id  # 个人身份编号
         self.children = []  # 存储子代person对象的列表
         self.x_person = 1  # 代表绘图时需要分配多大的横向空间
+        self.x_position = 0 # 代表绘图时的横坐标位置
 
     def add_ID(self, id):
         self.ID = id
@@ -26,7 +27,7 @@ class Person:
 class FamilyTree:
     """绘制家谱吊线图"""
 
-    def __init__(self,page,filepath):
+    def __init__(self, page, filepath):
         self.arr=[]
         self.page = page
         self.dict = {}
@@ -60,13 +61,11 @@ class FamilyTree:
                 return i
             
     def readTxtFile(self,FileName): # 文件转列表
-        """
-        将指定文本文件去掉行尾的换行符后以指定的分隔符转换成列表
-        """
+        """将指定文本文件去掉行尾的换行符后以指定的分隔符转换成列表"""
         with open(FileName, mode='r',encoding=self.coding) as f:
             return [char.rstrip('\n').split('\t') for char in f]
     
-    @timer
+    #@timer
     def draw_family(self): # 生成跨度8世的字典，绘制吊线图
         self.arr = self.readTxtFile(self.filepath)
         self.first_ancestor = self.arr [0][2] # 始祖名讳
@@ -155,17 +154,18 @@ class FamilyTree:
                 print(f"编号{char[4]}对应的人名不存在")
 
         # 可以通过下面的输出文件，验证读取文件的正确
-        with open('test.txt', mode='w',encoding=self.coding) as o:
-            for key, value in self.dict.items():
-                o.write(f"{value.name} :")
-                for child in value.children:
-                    o.write(f" {child.name}")
-                o.write("\n")
+        # with open('test.txt', mode='w',encoding=self.coding) as o:
+        #     for key, value in self.dict.items():
+        #         o.write(f"{value.name} :")
+        #         for child in value.children:
+        #             o.write(f" {child.name}")
+        #         o.write("\n")
 
     def plot_tree(self,root,dict,pdf):
         """绘制族谱"""
         self._count_children(root)  # 遍历整个族谱获取每个人要分配的横向距离
-        self._output_all_x_person(dict) # 输出每个人的横向距离进行验证
+        self._count_x_position(root) # 遍历整个族谱，计算每个人的横坐标
+        # self._output_all_x_person(dict) # 输出每个人的横向距离进行验证
         # 绘制
         if root.x_person < self.page_width:
              self.width = self.page_width / 52 * self.font_size  # 画布宽度设为始祖宽度与字体大小相关
@@ -187,9 +187,9 @@ class FamilyTree:
         char = '温县后街郑氏四门族谱' + "   第"+str(self.page)+"页   " + self.first_ancestor + "祖 " + str(self.start) + " 世 -- " + str(self.end - 1) + " 世 第" + str(self.page_num) + "页"
         ax.text(-self.width / 15,  self.height - self.y_word * 6, char, fontsize=self.font_size+3, ha='center', va='center')
         if root.name:
-            self._plot_person(ax, fig, root, 0, self.height - self.y_word * 8)
+            self._plot_person(ax, fig, root, self.height - self.y_word * 8)
         else:
-            self._plot_person(ax, fig, root, 0, self.height - self.y_word * 5)
+            self._plot_person(ax, fig, root, self.height - self.y_word * 5)
         pdf.savefig(fig)
         self.page += 1
         self.dict.clear()
@@ -205,67 +205,84 @@ class FamilyTree:
         """递归计算每个人所需分配的横向空间"""
         sum = 0
         if person.children and int(person.generation) < self.end:
-            for child in person.children:
+            for i, child in enumerate(person.children):
                 self._count_children(child)
-                sum += child.x_person
+                sum += child.x_person         
         if sum > 1:
             person.x_person = sum
 
-    def _plot_person(self, ax, fig, person, x=0, y = 0):
-        """绘制族谱中每个人的部分，递归调用"""       
+    def _count_x_position(self, person):
+        """确定每个人名字的横坐标"""
+        num = len(person.children) 
+        if num > 0 and int(person.generation) < self.end:
+            self._calc_children_x_position(person)  # 先按照 父代横坐标在总分配空间中间 的方式计算子代的横坐标
+            
+            for child in person.children:    
+                self._count_x_position(child) # 进入下一子代
+                
+            # 当从子代的递归返回后，根据子代横坐标对父代的横坐标进行修正
+            if num > 1:
+                x_left_children = person.children[0].x_position
+                x_right_children = person.children[-1].x_position
+                person.x_position = (x_left_children + x_right_children) / 2    
+            else:
+                person.x_position = person.children[0].x_position       
+    
+    def _plot_person(self, ax, fig, person, y = 0):
+        """绘制族谱中每个人的部分，递归调用"""
+        x = person.x_position       
         if int(person.generation) >= self.start:
             if person.ration == "嗣孙":
                 y -= self.y_word + self.y2 + self.y1
                 y_top = y + 2 * self.y_word + 1.1 * self.y1  # 名字少于两个字的按两个字算距离
                 y_bottom = y_top - 3 * self.y_height - self.y2 - 1.22 * self.y1
                 ax.plot([x, x], [y_top, y_bottom], 'k-', linewidth=self.line_width)
-                y -= self.y_word + self.y2
+                y -= self.y_word + self.y2                   
         if person.name: # 虚拟的始祖不绘制
-            self._plot_person_name(ax, person, x, y)  # 绘制人名
+            self._plot_person_name(ax, person, y)  # 绘制人名
         if person.children and int(person.generation) < self.end:
-            x_arr, y_child_bottom = self._plot_connect_line(ax, person, x, y)  # 绘制一个长辈到子代之间的连接线
-            for i, child in enumerate(person.children):
-                x_child = x_arr[i]
-                self._plot_person(ax, fig, child, x_child, y_child_bottom - self.y2)  # 递归               
+            y_child_bottom = self._plot_connect_line(ax, person, y)  # 绘制一个长辈到子代之间的连接线
+            for child in person.children:
+                self._plot_person(ax, fig, child, y_child_bottom - self.y2)  # 递归              
 
-    def _plot_person_name(self, ax, person, x, y):
+    def _plot_person_name(self, ax, person, y):
         """将人名拆成单个字符，依次从上到下绘制"""
         for i, char in enumerate(person.name):
             # 计算每个字符应该出现的位置
             y_name = y - i * self.y_word
             # 绘制单个字符
-            ax.text(x, y_name, char, fontsize=self.font_size, ha='center', va='center')
+            ax.text(person.x_position, y_name, char, fontsize=self.font_size, ha='center', va='center')
 
-    def _plot_connect_line(self, ax, person, x, y):
+    def _plot_connect_line(self, ax, person, y):
         """绘制一个长辈到子代之间的连接线"""
+        num = len(person.children)
+        
         # 先画一条竖线
         y_top = y - 2 * self.y_word + self.y1  # 名字少于两个字的按两个字算距离
         y_bottom = y_top - self.y_height
         if person.name: # 虚拟的始祖不绘制
-            ax.plot([x, x], [y_top, y_bottom], 'k-', linewidth=self.line_width)
+            ax.plot([person.x_position, person.x_position], [y_top, y_bottom], 'k-', linewidth=self.line_width)
 
         # 再画一条横线
-        x_arr = self._trans_arr(person, x)  # 表示每个子代的x方向位置
-        if person.name and len(person.children) > 1: # 虚拟的始祖不绘制
-            ax.plot([x_arr[0], x_arr[len(x_arr) - 1]], [y_bottom, y_bottom], 'k-', linewidth=self.line_width)
+        if person.name and num > 1: # 虚拟的始祖不绘制
+            ax.plot([person.children[0].x_position, person.children[-1].x_position], [y_bottom, y_bottom], 'k-', linewidth=self.line_width)
 
         # 再给每一个子代画一条竖线
         y_child_bottom = y_bottom - self.y_height
         if person.name: # 虚拟的始祖不绘制
-            for i in range(0, len(x_arr), 1):
-                ax.plot([x_arr[i], x_arr[i]], [y_bottom, y_child_bottom], 'k-', linewidth=self.line_width)
-        return x_arr, y_child_bottom
+            for i in range(0, num, 1):
+                ax.plot([person.children[i].x_position, person.children[i].x_position], [y_bottom, y_child_bottom], 'k-', linewidth=self.line_width)
+        return y_child_bottom
 
-    def _trans_arr(self, person, x):
+    def _calc_children_x_position(self, person):
         """将相对位置转换为绝对位置"""
         x_arr_pre = self._calc_x_arr_pre(person)
         x_parent = self._calc_x_parent(person)
         x_arr = []
-        for x_child in x_arr_pre:
+        for i, x_child in enumerate(x_arr_pre):
             relative_dis = x_child - x_parent
-            absolute_pos = x + relative_dis
-            x_arr.append(absolute_pos)
-        return x_arr
+            absolute_pos = person.x_position + relative_dis
+            person.children[i].x_position = absolute_pos
 
     def _calc_x_parent(self, person):
         """计算父代的相对位置"""
