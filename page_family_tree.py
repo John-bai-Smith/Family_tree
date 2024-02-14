@@ -70,8 +70,6 @@ class FamilyTree:
         self.arr = self.readTxtFile(self.filepath)
         self.first_ancestor = self.arr [0][2] # 始祖名讳
         self.last = int(self.arr[len(self.arr)-1][3]) + 1 # 最后一个成员的世系
-        self.start = int(self.arr[0][3]) # 第一个成员的世系数
-        self.end = self.start + self.pagenum # 每页结束世系数
         pdf = PdfPages(self.filename + '分页吊线图.pdf')
         self.start = int(self.arr[0][3]) # 每页起始世系数
         self.end = self.start + self.pagenum # 每页结束世系数
@@ -231,13 +229,12 @@ class FamilyTree:
     def _plot_person(self, ax, fig, person, y = 0):
         """绘制族谱中每个人的部分，递归调用"""
         x = person.x_position       
-        if int(person.generation) >= self.start:
-            if person.ration == "嗣孙":
-                y -= self.y_word + self.y2 + self.y1
-                y_top = y + 2 * self.y_word + 1.1 * self.y1  # 名字少于两个字的按两个字算距离
-                y_bottom = y_top - 3 * self.y_height - self.y2 - 1.22 * self.y1
-                ax.plot([x, x], [y_top, y_bottom], 'k-', linewidth=self.line_width)
-                y -= self.y_word + self.y2                   
+        if int(person.generation) > self.start and person.ration == "嗣孙":
+            y -= self.y_word + self.y2 + self.y1
+            y_top = y + 2 * self.y_word + 1.1 * self.y1  # 名字少于两个字的按两个字算距离
+            y_bottom = y_top - 3 * self.y_height - self.y2 - 1.22 * self.y1
+            ax.plot([x, x], [y_top, y_bottom], 'k-', linewidth=self.line_width)
+            y -= self.y_word + self.y2                   
         if person.name: # 虚拟的始祖不绘制
             self._plot_person_name(ax, person, y)  # 绘制人名
         if person.children and int(person.generation) < self.end:
